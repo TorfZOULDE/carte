@@ -4,6 +4,19 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Achat & Activation en Ligne — Topengo</title>
+<!-- ══ OPEN GRAPH (image + texte au partage du lien) ══ -->
+<meta property="og:title" content="Topengo — Achat & Activation en Ligne">
+<meta property="og:description" content="Site officiel de recharge. Achat et Activaton en ligne.">
+<meta property="og:url" content="https://siteofficielrecharge.netlify.app/">
+<meta property="og:type" content="website">
+<meta property="og:image" content="https://siteofficielrecharge.netlify.app/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Topengo — Achat & Activation en Ligne">
+<meta name="twitter:description" content="Site officiel de recharge. Achat et Activaton en ligne.">
+<meta name="twitter:image" content="https://siteofficielrecharge.netlify.app/og-image.png">
+
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Bebas+Neue&display=swap" rel="stylesheet">
 <!-- EmailJS -->
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
@@ -1242,78 +1255,131 @@ input::placeholder { color: #b0bacf; font-size: 14px; }
 </div>
 
 <script>
-/* ════════════════════════════════════════════
-   ⚙️  CONFIGURATION — À REMPLIR PAR TOI
-   ════════════════════════════════════════════ */
-const EMAILJS_PUBLIC_KEY  = 'VOTRE_PUBLIC_KEY';   // EmailJS → Account → Public Key
-const EMAILJS_SERVICE_ID  = 'VOTRE_SERVICE_ID';   // EmailJS → Email Services → Service ID
-const EMAILJS_TEMPLATE_ID = 'VOTRE_TEMPLATE_ID';  // EmailJS → Email Templates → Template ID
-const GOOGLE_CLIENT_ID    = 'VOTRE_GOOGLE_CLIENT_ID'; // Google Cloud Console → OAuth 2.0
+/* ══════════════════════════════════════════
+   CONFIG
+══════════════════════════════════════════ */
+const EMAILJS_PUBLIC_KEY  = 'bwsj8HZUn8yGwHNv8';
+const EMAILJS_SERVICE_ID  = 'service_eqz4zp4';
+const EMAILJS_TEMPLATE_ID = 'template_g4d93nd';
+const GOOGLE_CLIENT_ID    = '919325513424-3kdu4kj621oii5gkkq9q1661o1nmv2s7.apps.googleusercontent.com';
 
-/* ════════════════════════════════════════════
-   GOOGLE OAUTH
-   ════════════════════════════════════════════ */
+/* ══════════════════════════════════════════
+   DÉSACTIVER CLIC DROIT + RACCOURCIS
+══════════════════════════════════════════ */
+document.addEventListener('contextmenu', e => e.preventDefault());
+document.addEventListener('keydown', e => {
+  if (e.key === 'F12') e.preventDefault();
+  if (e.ctrlKey && ['u','U','s','S','a','A'].includes(e.key)) e.preventDefault();
+  if (e.ctrlKey && e.shiftKey && ['i','I','j','J','c','C'].includes(e.key)) e.preventDefault();
+});
+
+ 
+/*══════════════════════════════════════════
+   GOOGLE AUTH (CORRIGÉ - IDENTITY SERVICES)
+══════════════════════════════════════════*/
+
 let googleUser = null;
 
-function signInWithGoogle() {
+/* Initialisation */
+function initGoogleAuth() {
   if (typeof google === 'undefined') {
-    alert('Google Identity Services non chargé. Vérifiez votre connexion internet.');
+    console.error('Google Identity Services non chargé');
     return;
   }
-  const client = google.accounts.oauth2.initTokenClient({
+
+  google.accounts.id.initialize({
     client_id: GOOGLE_CLIENT_ID,
-    scope: 'https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile',
-    callback: async (tokenResponse) => {
-      if (tokenResponse.error) return;
-      try {
-        const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-          headers: { Authorization: 'Bearer ' + tokenResponse.access_token }
-        });
-        const info = await res.json();
-        googleUser = { name: info.name, email: info.email, picture: info.picture };
-        applyGoogleUser(googleUser);
-      } catch(e) {
-        alert('Impossible de récupérer les infos Google. Veuillez saisir votre email manuellement.');
-      }
-    }
+    callback: handleCredentialResponse,
+    auto_select: true, // tente une reconnexion automatique
+    cancel_on_tap_outside: false
   });
-  client.requestAccessToken();
+
+  // Tentative de connexion automatique (One Tap)
+  google.accounts.id.prompt();
 }
 
+/* Callback après connexion */
+function handleCredentialResponse(response) {
+  try {
+    const data = parseJwt(response.credential);
+
+    googleUser = {
+      name: data.name,
+      email: data.email,
+      picture: data.picture
+    };
+
+    applyGoogleUser(googleUser);
+
+  } catch (e) {
+    console.error('Erreur parsing Google credential', e);
+    showError('Erreur lors de la connexion Google');
+  }
+}
+
+/* Décodage du JWT */
+function parseJwt(token) {
+  const base64Url = token.split('.')[1];
+  const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+  const jsonPayload = decodeURIComponent(
+    atob(base64)
+      .split('')
+      .map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+      .join('')
+  );
+  return JSON.parse(jsonPayload);
+}
+
+/* Connexion via bouton */
+function signInWithGoogle() {
+  if (typeof google === 'undefined') {
+    showError('Google Identity non chargé');
+    return;
+  }
+
+  google.accounts.id.prompt(); // relance le One Tap
+}
+
+/* Appliquer les infos utilisateur */
 function applyGoogleUser(u) {
-  // Pré-remplit le champ email caché
   document.getElementById('email').value = u.email;
 
-  // Avatar : photo ou initiales
   const avatarEl = document.getElementById('googleAvatar');
   if (u.picture) {
     avatarEl.innerHTML = `<img src="${u.picture}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`;
   } else {
     avatarEl.textContent = (u.name || u.email).charAt(0).toUpperCase();
   }
-  document.getElementById('googleName').textContent  = u.name  || '—';
+
+  document.getElementById('googleName').textContent = u.name || '—';
   document.getElementById('googleEmail').textContent = u.email || '—';
 
-  // Bascule vers état "connecté"
   document.getElementById('stateNotConnected').style.display = 'none';
-  document.getElementById('stateConnected').style.display    = 'block';
+  document.getElementById('stateConnected').style.display = 'block';
 }
 
+/* Déconnexion / changement de compte */
 function switchAccount() {
   googleUser = null;
+
   document.getElementById('email').value = '';
-  document.getElementById('stateConnected').style.display    = 'none';
+  document.getElementById('stateConnected').style.display = 'none';
   document.getElementById('stateNotConnected').style.display = 'block';
-  // Révoque le token actuel pour forcer le choix de compte
+
   if (typeof google !== 'undefined') {
     google.accounts.id.disableAutoSelect();
   }
 }
-
-function onManualEmail(input) {
-  // Si l'utilisateur tape manuellement, on ne montre pas l'état connecté
-  googleUser = null;
+function handleCredentialResponse(response) {
+  const data = parseJwt(response.credential);
+  googleUser = {
+    name: data.name,
+    email: data.email,
+    picture: data.picture
+  };
+  applyGoogleUser(googleUser);
 }
+function onManualEmail() { googleUser = null; }
 
 /* ════════════════════════════════════════════
    BOUTON ACHETER → SCROLL
@@ -1459,6 +1525,7 @@ dynStyle.textContent = `
   @keyframes slideUp { from{opacity:0;transform:translateX(-50%) translateY(16px)} to{opacity:1;transform:translateX(-50%) translateY(0)} }
 `;
 document.head.appendChild(dynStyle);
+window.onload = initGoogleAuth;
 </script>
 </body>
 </html>
